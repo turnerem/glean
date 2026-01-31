@@ -13,6 +13,7 @@ export interface Origin {
 export interface Note {
   id: string;
   content: string;
+  image_data?: string; // Base64 encoded image
   tags: string[];
   origin: Origin;
   created_at: string;
@@ -30,6 +31,7 @@ export interface Tag {
 
 export interface CreateNoteRequest {
   content: string;
+  image_data?: string;
   tags: string[];
   origin: Origin;
 }

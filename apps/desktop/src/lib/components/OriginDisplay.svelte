@@ -9,20 +9,21 @@
 
   let { origin, onchange, editable = false }: Props = $props();
 
-  let isEditing = $state(false);
-  let manualInput = $state('');
+  let isEditingTitle = $state(false);
+  let editTitle = $state('');
 
-  function getDisplayText(): string {
-    switch (origin.type) {
-      case 'url':
-        return origin.title || origin.url || 'Web page';
-      case 'book':
-        return origin.book_title || 'Book';
-      case 'manual':
-        return origin.raw_input || 'Manual entry';
-      default:
-        return 'Unknown source';
+  function getDisplayTitle(): string {
+    if (origin.title) return origin.title;
+    if (origin.url) {
+      try {
+        return new URL(origin.url).hostname;
+      } catch {
+        return origin.url;
+      }
     }
+    if (origin.book_title) return origin.book_title;
+    if (origin.raw_input) return origin.raw_input;
+    return 'Unknown source';
   }
 
   function getIcon(): string {
@@ -38,107 +39,181 @@
     }
   }
 
-  function startEditing() {
+  function startEditingTitle() {
     if (!editable) return;
-    isEditing = true;
-    manualInput = origin.raw_input || '';
+    isEditingTitle = true;
+    editTitle = origin.title || '';
   }
 
-  function saveManualOrigin() {
-    if (onchange && manualInput.trim()) {
-      onchange({
-        type: 'manual',
-        raw_input: manualInput.trim(),
-      });
+  function saveTitleEdit() {
+    if (!onchange) {
+      isEditingTitle = false;
+      return;
     }
-    isEditing = false;
+
+    const newTitle = editTitle.trim();
+
+    // Preserve existing origin data but update the title
+    onchange({
+      ...origin,
+      title: newTitle || undefined,
+    });
+
+    isEditingTitle = false;
   }
 
-  function handleKeydown(e: KeyboardEvent) {
+  function handleTitleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      saveManualOrigin();
+      saveTitleEdit();
     } else if (e.key === 'Escape') {
-      isEditing = false;
+      isEditingTitle = false;
+    }
+  }
+
+  function openUrl(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (origin.url) {
+      window.open(origin.url, '_blank');
     }
   }
 </script>
 
 <div class="origin-display">
-  {#if isEditing}
-    <input
-      bind:value={manualInput}
-      onkeydown={handleKeydown}
-      onblur={saveManualOrigin}
-      placeholder="Enter source (URL, book title, etc.)"
-      class="origin-input"
-      autofocus
-    />
-  {:else}
-    <button
-      class="origin-badge"
-      class:editable
-      onclick={startEditing}
-      disabled={!editable}
-    >
-      <span class="icon">{getIcon()}</span>
-      <span class="text">{getDisplayText()}</span>
-      {#if editable && origin.type === 'unknown'}
-        <span class="edit-hint">click to edit</span>
-      {/if}
-    </button>
-  {/if}
+  <span class="icon">{getIcon()}</span>
+
+  <div class="origin-content">
+    {#if isEditingTitle}
+      <input
+        bind:value={editTitle}
+        onkeydown={handleTitleKeydown}
+        onblur={saveTitleEdit}
+        placeholder="Enter description"
+        class="title-input"
+        autofocus
+      />
+    {:else}
+      <button
+        class="title"
+        class:editable
+        onclick={startEditingTitle}
+        title={editable ? 'Click to edit description' : ''}
+      >
+        {getDisplayTitle()}
+        {#if editable}
+          <span class="edit-icon">✎</span>
+        {/if}
+      </button>
+    {/if}
+
+    {#if origin.url}
+      <a
+        href={origin.url}
+        class="url-link"
+        onclick={openUrl}
+        title={origin.url}
+      >
+        {#if origin.url.length > 50}
+          {origin.url.slice(0, 50)}...
+        {:else}
+          {origin.url}
+        {/if}
+      </a>
+    {/if}
+
+    {#if origin.type === 'book' && origin.chapter}
+      <span class="book-detail">Ch. {origin.chapter}</span>
+    {/if}
+
+    {#if origin.type === 'book' && origin.page}
+      <span class="book-detail">p. {origin.page}</span>
+    {/if}
+  </div>
 </div>
 
 <style>
   .origin-display {
-    margin: 0.5rem 0;
-  }
-
-  .origin-badge {
-    display: inline-flex;
-    align-items: center;
+    display: flex;
+    align-items: flex-start;
     gap: 0.5rem;
-    padding: 0.375rem 0.75rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 0.5rem;
     border: 1px solid #333;
     background: #252538;
-    color: #aaa;
-    font-size: 0.8rem;
-    cursor: default;
-    max-width: 100%;
-    overflow: hidden;
-  }
-
-  .origin-badge.editable {
-    cursor: pointer;
-  }
-
-  .origin-badge.editable:hover {
-    border-color: #444;
-    color: #ccc;
   }
 
   .icon {
     flex-shrink: 0;
+    font-size: 1rem;
+    line-height: 1.4;
   }
 
-  .text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .origin-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    flex: 1;
   }
 
-  .edit-hint {
-    color: #666;
-    font-size: 0.7rem;
-    font-style: italic;
+  .title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: #ddd;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: left;
+    cursor: default;
+    word-break: break-word;
   }
 
-  .origin-input {
+  .title.editable {
+    cursor: pointer;
+  }
+
+  .title.editable:hover {
+    color: #fff;
+  }
+
+  .title.editable:hover .edit-icon {
+    opacity: 1;
+  }
+
+  .edit-icon {
+    opacity: 0;
+    font-size: 0.75rem;
+    color: #888;
+    transition: opacity 0.15s;
+  }
+
+  .url-link {
+    color: #4a9eff;
+    font-size: 0.75rem;
+    text-decoration: none;
+    word-break: break-all;
+    cursor: pointer;
+  }
+
+  .url-link:hover {
+    text-decoration: underline;
+    color: #6ab0ff;
+  }
+
+  .book-detail {
+    color: #888;
+    font-size: 0.75rem;
+  }
+
+  .title-input {
     width: 100%;
-    padding: 0.5rem;
-    border-radius: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
     border: 1px solid #4a9eff;
     background: #1a1a2e;
     color: #fff;
@@ -146,7 +221,7 @@
     outline: none;
   }
 
-  .origin-input::placeholder {
+  .title-input::placeholder {
     color: #666;
   }
 </style>

@@ -21,6 +21,7 @@ pub enum DbError {
 pub struct Note {
     pub id: String,
     pub content: String,
+    pub image_data: Option<String>,
     pub tags: Vec<String>,
     pub origin: Origin,
     pub created_at: DateTime<Utc>,
@@ -74,6 +75,7 @@ impl Database {
             CREATE TABLE IF NOT EXISTS notes (
                 id TEXT PRIMARY KEY,
                 content TEXT NOT NULL,
+                image_data TEXT,
                 tags TEXT NOT NULL DEFAULT '[]',
                 origin TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL,
@@ -93,29 +95,34 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_notes_is_deleted ON notes(is_deleted);
             "#,
         )?;
+
+        // Migration: Add image_data column if it doesn't exist
+        let _ = conn.execute("ALTER TABLE notes ADD COLUMN image_data TEXT", []);
+
         Ok(())
     }
 
     pub fn get_notes(&self) -> Result<Vec<Note>, DbError> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, content, tags, origin, created_at, updated_at, sync_version, is_deleted
+            "SELECT id, content, image_data, tags, origin, created_at, updated_at, sync_version, is_deleted
              FROM notes WHERE is_deleted = 0 ORDER BY created_at DESC",
         )?;
 
         let notes = stmt
             .query_map([], |row| {
-                let tags_json: String = row.get(2)?;
-                let origin_json: String = row.get(3)?;
+                let tags_json: String = row.get(3)?;
+                let origin_json: String = row.get(4)?;
                 Ok(Note {
                     id: row.get(0)?,
                     content: row.get(1)?,
+                    image_data: row.get(2)?,
                     tags: serde_json::from_str(&tags_json).unwrap_or_default(),
                     origin: serde_json::from_str(&origin_json).unwrap_or_default(),
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
-                    sync_version: row.get(6)?,
-                    is_deleted: row.get(7)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                    sync_version: row.get(7)?,
+                    is_deleted: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -123,7 +130,7 @@ impl Database {
         Ok(notes)
     }
 
-    pub fn create_note(&self, content: String, tags: Vec<String>, origin: Origin) -> Result<Note, DbError> {
+    pub fn create_note(&self, content: String, image_data: Option<String>, tags: Vec<String>, origin: Origin) -> Result<Note, DbError> {
         let conn = self.conn.lock().unwrap();
         let id = Uuid::now_v7().to_string();
         let now = Utc::now();
@@ -131,14 +138,15 @@ impl Database {
         let origin_json = serde_json::to_string(&origin)?;
 
         conn.execute(
-            "INSERT INTO notes (id, content, tags, origin, created_at, updated_at, sync_version, is_deleted)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0)",
-            params![id, content, tags_json, origin_json, now, now],
+            "INSERT INTO notes (id, content, image_data, tags, origin, created_at, updated_at, sync_version, is_deleted)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0)",
+            params![id, content, image_data, tags_json, origin_json, now, now],
         )?;
 
         Ok(Note {
             id,
             content,
+            image_data,
             tags,
             origin,
             created_at: now,
@@ -148,16 +156,25 @@ impl Database {
         })
     }
 
-    pub fn update_note(&self, id: &str, content: String, tags: Vec<String>) -> Result<(), DbError> {
+    pub fn update_note(&self, id: &str, content: String, tags: Vec<String>, origin: Option<Origin>) -> Result<(), DbError> {
         let conn = self.conn.lock().unwrap();
         let now = Utc::now();
         let tags_json = serde_json::to_string(&tags)?;
 
-        conn.execute(
-            "UPDATE notes SET content = ?1, tags = ?2, updated_at = ?3, sync_version = sync_version + 1
-             WHERE id = ?4",
-            params![content, tags_json, now, id],
-        )?;
+        if let Some(origin) = origin {
+            let origin_json = serde_json::to_string(&origin)?;
+            conn.execute(
+                "UPDATE notes SET content = ?1, tags = ?2, origin = ?3, updated_at = ?4, sync_version = sync_version + 1
+                 WHERE id = ?5",
+                params![content, tags_json, origin_json, now, id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE notes SET content = ?1, tags = ?2, updated_at = ?3, sync_version = sync_version + 1
+                 WHERE id = ?4",
+                params![content, tags_json, now, id],
+            )?;
+        }
 
         Ok(())
     }
@@ -258,7 +275,7 @@ mod tests {
         };
 
         let note = db
-            .create_note("Test content".to_string(), vec!["tag1".to_string()], origin)
+            .create_note("Test content".to_string(), None, vec!["tag1".to_string()], origin)
             .unwrap();
 
         assert_eq!(note.content, "Test content");
@@ -277,10 +294,10 @@ mod tests {
 
         let origin = Origin::default();
         let note = db
-            .create_note("Original".to_string(), vec![], origin)
+            .create_note("Original".to_string(), None, vec![], origin)
             .unwrap();
 
-        db.update_note(&note.id, "Updated".to_string(), vec!["new_tag".to_string()])
+        db.update_note(&note.id, "Updated".to_string(), vec!["new_tag".to_string()], None)
             .unwrap();
 
         let notes = db.get_notes().unwrap();
@@ -294,7 +311,7 @@ mod tests {
 
         let origin = Origin::default();
         let note = db
-            .create_note("To delete".to_string(), vec![], origin)
+            .create_note("To delete".to_string(), None, vec![], origin)
             .unwrap();
 
         db.delete_note(&note.id).unwrap();
@@ -323,9 +340,9 @@ mod tests {
         let db = create_test_db();
 
         let origin = Origin::default();
-        db.create_note("First".to_string(), vec![], origin.clone()).unwrap();
-        db.create_note("Second".to_string(), vec![], origin.clone()).unwrap();
-        db.create_note("Third".to_string(), vec![], origin).unwrap();
+        db.create_note("First".to_string(), None, vec![], origin.clone()).unwrap();
+        db.create_note("Second".to_string(), None, vec![], origin.clone()).unwrap();
+        db.create_note("Third".to_string(), None, vec![], origin).unwrap();
 
         let notes = db.get_notes().unwrap();
         assert_eq!(notes.len(), 3);

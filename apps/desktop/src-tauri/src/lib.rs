@@ -34,8 +34,9 @@ pub fn run() {
             // Tag commands
             commands::get_tags,
             commands::create_tag,
-            // Origin detection
+            // Capture commands
             commands::detect_origin,
+            commands::simulate_copy,
             // Sync commands
             commands::sync_get_status,
             commands::sync_configure,

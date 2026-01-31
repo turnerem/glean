@@ -31,9 +31,11 @@ pub struct SafariDetector;
 
 impl OriginDetector for SafariDetector {
     fn detect(&self) -> Option<Origin> {
+        // Only detect if Safari is the frontmost app
         let script = r#"
             tell application "System Events"
-                if (name of processes) contains "Safari" then
+                set frontApp to name of first application process whose frontmost is true
+                if frontApp is "Safari" then
                     tell application "Safari"
                         if (count of windows) > 0 then
                             set currentTab to current tab of front window
@@ -73,9 +75,11 @@ pub struct ChromeDetector;
 
 impl OriginDetector for ChromeDetector {
     fn detect(&self) -> Option<Origin> {
+        // Only detect if Chrome is the frontmost app
         let script = r#"
             tell application "System Events"
-                if (name of processes) contains "Google Chrome" then
+                set frontApp to name of first application process whose frontmost is true
+                if frontApp is "Google Chrome" then
                     tell application "Google Chrome"
                         if (count of windows) > 0 then
                             set activeTab to active tab of front window
@@ -115,17 +119,15 @@ pub struct FirefoxDetector;
 
 impl OriginDetector for FirefoxDetector {
     fn detect(&self) -> Option<Origin> {
-        // Firefox doesn't have great AppleScript support, but we can try
+        // Only detect if Firefox is the frontmost app
+        // Firefox doesn't have great AppleScript support
         let script = r#"
             tell application "System Events"
-                if (name of processes) contains "Firefox" then
-                    tell application "Firefox"
-                        if (count of windows) > 0 then
-                            -- Firefox's AppleScript support is limited
-                            -- This may not work on all versions
-                            return ""
-                        end if
-                    end tell
+                set frontApp to name of first application process whose frontmost is true
+                if frontApp is "Firefox" then
+                    -- Firefox's AppleScript support is limited
+                    -- This may not work on all versions
+                    return ""
                 end if
             end tell
             return ""
@@ -153,9 +155,11 @@ pub struct ArcDetector;
 
 impl OriginDetector for ArcDetector {
     fn detect(&self) -> Option<Origin> {
+        // Only detect if Arc is the frontmost app
         let script = r#"
             tell application "System Events"
-                if (name of processes) contains "Arc" then
+                set frontApp to name of first application process whose frontmost is true
+                if frontApp is "Arc" then
                     tell application "Arc"
                         if (count of windows) > 0 then
                             set activeTab to active tab of front window

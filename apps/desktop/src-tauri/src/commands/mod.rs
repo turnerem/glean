@@ -35,6 +35,7 @@ impl From<sync::SyncError> for CommandError {
 #[derive(Debug, Deserialize)]
 pub struct CreateNoteRequest {
     pub content: String,
+    pub image_data: Option<String>,
     pub tags: Vec<String>,
     pub origin: Origin,
 }
@@ -44,6 +45,7 @@ pub struct UpdateNoteRequest {
     pub id: String,
     pub content: String,
     pub tags: Vec<String>,
+    pub origin: Option<Origin>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,14 +63,14 @@ pub fn get_notes() -> Result<Vec<Note>, CommandError> {
 #[tauri::command]
 pub fn create_note(request: CreateNoteRequest) -> Result<Note, CommandError> {
     let db = db::get_db();
-    db.create_note(request.content, request.tags, request.origin)
+    db.create_note(request.content, request.image_data, request.tags, request.origin)
         .map_err(Into::into)
 }
 
 #[tauri::command]
 pub fn update_note(request: UpdateNoteRequest) -> Result<(), CommandError> {
     let db = db::get_db();
-    db.update_note(&request.id, request.content, request.tags)
+    db.update_note(&request.id, request.content, request.tags, request.origin)
         .map_err(Into::into)
 }
 
@@ -93,6 +95,45 @@ pub fn create_tag(request: CreateTagRequest) -> Result<Tag, CommandError> {
 #[tauri::command]
 pub async fn detect_origin() -> Result<Origin, CommandError> {
     detect().await.map_err(Into::into)
+}
+
+/// Simulates Cmd+C keystroke to copy selected text to clipboard.
+/// Requires Accessibility permissions on macOS.
+#[tauri::command]
+pub async fn simulate_copy() -> Result<(), CommandError> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        // Use AppleScript to simulate Cmd+C
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(r#"tell application "System Events" to keystroke "c" using command down"#)
+            .output()
+            .map_err(|e| CommandError {
+                message: format!("Failed to simulate copy: {}", e),
+            })?;
+
+        if !output.status.success() {
+            return Err(CommandError {
+                message: format!(
+                    "AppleScript failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+            });
+        }
+
+        // Brief delay for clipboard to populate
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // On other platforms, do nothing - user must copy manually
+        log::warn!("simulate_copy is only supported on macOS");
+    }
+
+    Ok(())
 }
 
 // Sync commands

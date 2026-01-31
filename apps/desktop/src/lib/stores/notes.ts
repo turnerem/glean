@@ -16,9 +16,9 @@ function createNotesStore() {
         console.error('Failed to load notes:', e);
       }
     },
-    async create(content: string, tags: string[], origin: Origin): Promise<Note | null> {
+    async create(content: string, tags: string[], origin: Origin, imageData?: string): Promise<Note | null> {
       try {
-        const request: CreateNoteRequest = { content, tags, origin };
+        const request: CreateNoteRequest = { content, image_data: imageData, tags, origin };
         const note = await invoke<Note>('create_note', { request });
         update(notes => [note, ...notes]);
         return note;
@@ -33,6 +33,18 @@ function createNotesStore() {
         update(notes => notes.filter(n => n.id !== id));
       } catch (e) {
         console.error('Failed to delete note:', e);
+      }
+    },
+    async updateNote(id: string, content: string, tags: string[], origin?: Origin): Promise<boolean> {
+      try {
+        await invoke('update_note', { request: { id, content, tags, origin } });
+        update(notes => notes.map(n =>
+          n.id === id ? { ...n, content, tags, ...(origin && { origin }), updated_at: new Date().toISOString() } : n
+        ));
+        return true;
+      } catch (e) {
+        console.error('Failed to update note:', e);
+        return false;
       }
     },
   };
@@ -70,6 +82,7 @@ function createTagsStore() {
 interface CaptureState {
   isOpen: boolean;
   content: string;
+  imageData?: string;
   origin: Origin;
   selectedTags: string[];
 }
@@ -78,6 +91,7 @@ function createCaptureStore() {
   const initial: CaptureState = {
     isOpen: false,
     content: '',
+    imageData: undefined,
     origin: { type: 'unknown' },
     selectedTags: [],
   };
@@ -86,10 +100,11 @@ function createCaptureStore() {
 
   return {
     subscribe,
-    open(content: string, origin: Origin) {
+    open(content: string, origin: Origin, imageData?: string) {
       set({
         isOpen: true,
         content,
+        imageData,
         origin,
         selectedTags: [],
       });
@@ -102,6 +117,9 @@ function createCaptureStore() {
     },
     setContent(content: string) {
       update(s => ({ ...s, content }));
+    },
+    setImageData(imageData: string | undefined) {
+      update(s => ({ ...s, imageData }));
     },
     setOrigin(origin: Origin) {
       update(s => ({ ...s, origin }));
