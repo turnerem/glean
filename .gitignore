@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+target/
+bin/
+
+# Tauri
+apps/desktop/src-tauri/target/
+
+# Go
+apps/api/bin/
+apps/api/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.db-journal
+
+# Test coverage
+coverage/
+.nyc_output/

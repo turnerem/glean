@@ -1,0 +1,25 @@
+{
+  "name": "glean",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Grab text from anywhere and save it as notes",
+  "scripts": {
+    "dev": "pnpm --filter @glean/desktop dev",
+    "build": "pnpm --filter @glean/desktop build",
+    "tauri": "pnpm --filter @glean/desktop tauri",
+    "api:dev": "cd apps/api && go run ./cmd/server",
+    "api:build": "cd apps/api && go build -o bin/server ./cmd/server"
+  },
+  "keywords": [
+    "notes",
+    "clipboard",
+    "tauri",
+    "svelte"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
