@@ -189,7 +189,3 @@ glean/
 - **API**: [Go](https://go.dev/) with [Gin](https://gin-gonic.com/)
 - **Databases**: SQLite (local), PostgreSQL (sync server)
 - **Auth**: JWT tokens
-
-## License
-
-MIT
